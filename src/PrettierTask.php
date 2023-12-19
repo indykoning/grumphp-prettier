@@ -6,15 +6,22 @@ namespace Indykoning\GrumPHPPrettier;
 
 use GrumPHP\Collection\ProcessArgumentsCollection;
 use GrumPHP\Fixer\Provider\FixableProcessResultProvider;
+use GrumPHP\Formatter\ProcessFormatterInterface;
 use GrumPHP\Runner\TaskResult;
 use GrumPHP\Runner\TaskResultInterface;
 use GrumPHP\Task\AbstractExternalTask;
+use GrumPHP\Task\Config\ConfigOptionsResolver;
 use GrumPHP\Task\Context\ContextInterface;
 use GrumPHP\Task\Context\GitPreCommitContext;
 use GrumPHP\Task\Context\RunContext;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Process\Process;
 
+/**
+ * Prettier task.
+ *
+ * @extends AbstractExternalTask<ProcessFormatterInterface>
+ */
 class PrettierTask extends AbstractExternalTask
 {
     public function getName(): string
@@ -22,16 +29,16 @@ class PrettierTask extends AbstractExternalTask
         return 'prettier';
     }
 
-    public static function getConfigurableOptions(): OptionsResolver
+    public static function getConfigurableOptions(): ConfigOptionsResolver
     {
         $resolver = new OptionsResolver();
 
         $resolver->setDefaults([
             'command' => getcwd() . DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, ['node_modules', '.bin', 'prettier']),
             'triggered_by' => [
-                'js', 'ts', 'jsx', 'tsx', 'vue', # JS-Like files
-                'css', 'less', 'scss', 'sass', # CSS-Like files
-                'html', 'blade.php', 'antlers', 'phtml' # Template-Like files
+                'js', 'ts', 'jsx', 'tsx', 'vue', // JS-Like files
+                'css', 'less', 'scss', 'sass', // CSS-Like files
+                'html', 'blade.php', 'antlers', 'phtml', // Template-Like files
             ],
             'ignore_patterns' => [],
             'ignore_unknown' => true,
@@ -76,7 +83,9 @@ class PrettierTask extends AbstractExternalTask
         $resolver->addAllowedTypes('use_tabs', ['null', 'boolean']);
         $resolver->addAllowedTypes('vue_indent_script_and_style', ['null', 'boolean']);
 
-        return $resolver;
+        return ConfigOptionsResolver::fromClosure(
+            static fn (array $options): array => $resolver->resolve($options)
+        );
     }
 
     public function canRunInContext(ContextInterface $context): bool
@@ -128,6 +137,7 @@ class PrettierTask extends AbstractExternalTask
                 function () use ($arguments): Process {
                     $arguments->removeElement('--check');
                     $arguments->add('--write');
+
                     return $this->processBuilder->buildProcess($arguments);
                 }
             );

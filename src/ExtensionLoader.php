@@ -5,19 +5,11 @@ declare(strict_types=1);
 namespace Indykoning\GrumPHPPrettier;
 
 use GrumPHP\Extension\ExtensionInterface;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Reference;
 
 class ExtensionLoader implements ExtensionInterface
 {
-    /**
-     * @param  ContainerBuilder  $container
-     */
-    public function load(ContainerBuilder $container): void
+    public function imports(): iterable
     {
-        $container->register('task.prettier', PrettierTask::class)
-            ->addArgument(new Reference('process_builder'))
-            ->addArgument(new Reference('formatter.raw_process'))
-            ->addTag('grumphp.task', ['task' => 'prettier']);
+        yield __DIR__ . '/../services.yaml';
     }
 }
