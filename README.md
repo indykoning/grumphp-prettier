@@ -27,6 +27,13 @@ grumphp:
         command: "node_modules/.bin/prettier"
         triggered_by: ["js", "ts", "jsx", "tsx", "vue", "css", "less", "scss", "sass", "html", "blade.php", "antlers", "phtml"]
         ignore_patterns: []
+
+        # Whether it should immediately fix instead of asking to fix
+        auto_fix: false
+        # If auto fix is enabled should we stage it as well?
+        # With both on it will fix and add the fixed files while you're committing
+        auto_stage: false
+
         # These optional settings pass arguments to prettier, overwriting your .prettierrc
         # https://prettier.io/docs/en/options.html
         ignore_unknown: true

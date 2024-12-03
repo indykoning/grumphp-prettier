@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Indykoning\GrumPHPPrettier;
 
+use GrumPHP\Collection\FilesCollection;
 use GrumPHP\Collection\ProcessArgumentsCollection;
 use GrumPHP\Fixer\Provider\FixableProcessResultProvider;
 use GrumPHP\Formatter\ProcessFormatterInterface;
@@ -24,6 +25,11 @@ use Symfony\Component\Process\Process;
  */
 class PrettierTask extends AbstractExternalTask
 {
+    private const CONTEXT_NAME = [
+        GitPreCommitContext::class => 'pre_commit',
+        RunContext::class => 'run',
+    ];
+
     public function getName(): string
     {
         return 'prettier';
@@ -42,6 +48,8 @@ class PrettierTask extends AbstractExternalTask
             ],
             'ignore_patterns' => [],
             'ignore_unknown' => true,
+            'auto_fix' => false,
+            'auto_stage' => false,
 
             'arrow_parens' => null,
             'bracket_same_line' => null,
@@ -61,10 +69,14 @@ class PrettierTask extends AbstractExternalTask
             'vue_indent_script_and_style' => null,
         ]);
 
+        // Grumphp config
         $resolver->addAllowedTypes('command', ['string']);
         $resolver->addAllowedTypes('triggered_by', ['array']);
         $resolver->addAllowedTypes('ignore_patterns', ['array']);
+        $resolver->addAllowedValues('auto_fix', [true, false, 'pre_commit', 'run']);
+        $resolver->addAllowedValues('auto_stage', [true, false, 'pre_commit', 'run']);
 
+        // Prettier config
         $resolver->addAllowedTypes('ignore_unknown', ['boolean']);
         $resolver->addAllowedTypes('arrow_parens', ['null', 'string']);
         $resolver->addAllowedTypes('bracket_same_line', ['null', 'boolean']);
@@ -124,9 +136,16 @@ class PrettierTask extends AbstractExternalTask
         $arguments->addOptionalArgument('--trailing-comma=%s', $config['trailing_comma']);
         $arguments->addOptionalArgument('--use-tabs', $config['use_tabs']);
         $arguments->addOptionalArgument('--vue-indent-script-and-style', $config['vue_indent_script_and_style']);
-        $arguments->add('--check');
 
         $arguments->addFiles($files);
+
+        $contextName = self::CONTEXT_NAME[get_class($context)];
+        if (in_array($config['auto_fix'], [true, $contextName])) {
+            return $this->fixRun($context, $arguments, $files);
+        }
+
+        $arguments->add('--check');
+
         $process = $this->processBuilder->buildProcess($arguments);
 
         $process->run();
@@ -141,6 +160,42 @@ class PrettierTask extends AbstractExternalTask
                     return $this->processBuilder->buildProcess($arguments);
                 }
             );
+        }
+
+        return TaskResult::createPassed($this, $context);
+    }
+
+    protected function fixRun(ContextInterface $context, ProcessArgumentsCollection $arguments, FilesCollection $files): TaskResultInterface
+    {
+        $config = $this->getConfig()->getOptions();
+        $contextName = self::CONTEXT_NAME[get_class($context)];
+
+        $arguments->add('--write');
+        $process = $this->processBuilder->buildProcess($arguments);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return TaskResult::createFailed($this, $context, $this->formatter->format($process));
+        }
+
+        if (in_array($config['auto_stage'], [true, $contextName])) {
+            return $this->runGitAdd($context, $files);
+        }
+
+        return TaskResult::createPassed($this, $context);
+    }
+
+    protected function runGitAdd(ContextInterface $context, FilesCollection $files): TaskResultInterface
+    {
+        $gitArgs = $this->processBuilder->createArgumentsForCommand('git');
+        $gitArgs->add('add');
+        $gitArgs->addFiles($files);
+
+        $process = $this->processBuilder->buildProcess($gitArgs);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            return TaskResult::createFailed($this, $context, $this->formatter->format($process));
         }
 
         return TaskResult::createPassed($this, $context);
